@@ -1,6 +1,6 @@
 // Root server entry point for Cloud Run / Production and full-stack runtime
 const { server } = require('./backend/src/server.js');
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 5000;
 
 if (!server.listening) {
   server.listen(PORT, '0.0.0.0', () => {
