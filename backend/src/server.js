@@ -1,0 +1,182 @@
+const http = require('http');
+const express = require('express');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs');
+require('dotenv').config();
+
+const { initDb } = require('./db');
+const { initSockets } = require('./sockets');
+const { apiLimiter } = require('./middleware/rateLimiter');
+const { errorHandler } = require('./middleware/errorHandler');
+
+// Route imports
+const authRoutes = require('./routes/auth');
+const partnerRoutes = require('./routes/partners');
+const inviteRoutes = require('./routes/invites');
+const roomsRoutes = require('./routes/rooms');
+const cyberRoutes = require('./routes/cyber');
+const linuxRoutes = require('./routes/linux');
+const quizzesRoutes = require('./routes/quizzes');
+const revisionRoutes = require('./routes/revision');
+const communityRoutes = require('./routes/community');
+const musicRoutes = require('./routes/music');
+
+// Initialize database schema and seeds
+initDb();
+
+const app = express();
+app.set('trust proxy', 1);
+const server = http.createServer(app);
+
+const PORT = 3000;
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
+
+// Socket.IO Server Configuration
+const io = new Server(server, {
+  cors: {
+    origin: CLIENT_ORIGIN,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
+    credentials: true
+  },
+  pingTimeout: 30000,
+  pingInterval: 10000
+});
+
+// Attach io instance to app
+app.set('io', io);
+
+// Middleware
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false
+}));
+app.use(cors({
+  origin: CLIENT_ORIGIN,
+  credentials: true
+}));
+app.use(compression());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Process-level crash guards to ensure 100% backend uptime on Render
+process.on('uncaughtException', (err) => {
+  console.error('[Server UncaughtException]:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server UnhandledRejection]:', reason);
+});
+
+// Guaranteed static uploads directory
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  let dbOk = true;
+  try {
+    require('./db').db.prepare('SELECT 1 as ok').get();
+  } catch {
+    dbOk = false;
+  }
+  res.json({
+    status: dbOk ? 'healthy' : 'degraded',
+    service: 'DUOCORE Backend Server',
+    tagline: 'Learn. Practice. Challenge. Together.',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database: dbOk ? 'ok' : 'error'
+  });
+});
+
+// Apply rate limiter to API routes
+app.use('/api', apiLimiter);
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/partners', partnerRoutes);
+app.use('/api/invites', inviteRoutes);
+app.use('/api/rooms', roomsRoutes);
+app.use('/api/cyber', cyberRoutes);
+app.use('/api/linux', linuxRoutes);
+app.use('/api/quizzes', quizzesRoutes);
+app.use('/api/revision', revisionRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/music', musicRoutes);
+
+// Socket.IO Handlers
+initSockets(io);
+
+// Serve built frontend assets
+const candidateDistDirs = [
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../../../frontend/dist'),
+  path.resolve(__dirname, '../../dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const getActiveDist = () => candidateDistDirs.find(d => fs.existsSync(d)) || null;
+
+app.use((req, res, next) => {
+  const dist = getActiveDist();
+  if (dist) {
+    return express.static(dist, {
+      setHeaders: (response, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          response.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+      }
+    })(req, res, next);
+  }
+  next();
+});
+
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads') && !req.path.startsWith('/socket.io')) {
+    const dist = getActiveDist();
+    if (dist) {
+      const indexPath = path.join(dist, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return res.sendFile(indexPath);
+      }
+    }
+  }
+  next();
+});
+
+// Centralized error handler
+app.use(errorHandler);
+
+// Catch unhandled 404s
+app.use((req, res) => {
+  res.status(404).json({ error: `Route not found: ${req.method} ${req.originalUrl}` });
+});
+
+if (require.main === module) {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`
+  ╔════════════════════════════════════════════════════════════════════╗
+  ║                      DUOCORE BACKEND SERVER                        ║
+  ║         "Learn. Practice. Challenge. Together."                    ║
+  ╠════════════════════════════════════════════════════════════════════╣
+  ║  📡 HTTP Server running on: http://localhost:${PORT}                 ║
+  ║  ⚡ Socket.IO listening on: ws://localhost:${PORT}                   ║
+  ║  🛡️ Health Check:          http://localhost:${PORT}/api/health        ║
+  ╚════════════════════════════════════════════════════════════════════╝
+    `);
+  });
+}
+
+module.exports = { app, server };

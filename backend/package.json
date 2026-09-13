@@ -1,0 +1,33 @@
+{
+  "name": "duocore-backend",
+  "version": "1.0.0",
+  "description": "DUOCORE Backend Server - Learn. Practice. Challenge. Together.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "postinstall": "mkdir -p bin && ([ -f bin/yt-dlp ] || curl -L --connect-timeout 5 --max-time 30 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o bin/yt-dlp && chmod +x bin/yt-dlp || true)"
+  },
+  "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
+    "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "crypto-js": "^4.2.0",
+    "des.js": "^1.1.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.10.1",
+    "multer": "^2.3.0",
+    "pg": "^8.23.0",
+    "play-dl": "^1.9.7",
+    "socket.io": "^4.8.3",
+    "uuid": "^13.0.0",
+    "yt-search": "^2.13.1"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "SoundWave",
+  "description": "High-fidelity music streaming, synced lyrics, and advanced audio player.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

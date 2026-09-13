@@ -1,0 +1,9 @@
+{
+  "appId": "com.duocore.app",
+  "appName": "DuoCore",
+  "webDir": "dist",
+  "server": {
+    "url": "https://soundwave-ns7b.onrender.com",
+    "cleartext": true
+  }
+}
