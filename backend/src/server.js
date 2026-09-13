@@ -33,7 +33,7 @@ const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 5000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
 
 // Socket.IO Server Configuration
